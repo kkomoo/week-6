@@ -1,7 +1,7 @@
 import React from 'react';
 import { Container, Row, Col, Card, Button, Badge } from 'react-bootstrap';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faShoppingCart, faStar, faHeart } from '@fortawesome/free-solid-svg-icons';
+import { faShoppingCart, faStar } from '@fortawesome/free-solid-svg-icons';
 
 // Watch images
 import classicSilver from '../assets/watches/classic-silver.jpg';
@@ -136,11 +136,6 @@ const Home = () => {
     console.log('Added to cart:', product);
   };
 
-  const handleWishlist = (product) => {
-    // In a real app, you would manage wishlist state here
-    console.log('Added to wishlist:', product);
-  };
-
   return (
     <div className="bg-light">
       {/* Hero Section */}
@@ -188,14 +183,6 @@ const Home = () => {
                       New
                     </Badge>
                   )}
-                  <Button
-                    variant="light"
-                    size="sm"
-                    className="position-absolute top-0 start-0 m-2 rounded-circle p-2"
-                    onClick={() => handleWishlist(product)}
-                  >
-                    <FontAwesomeIcon icon={faHeart} />
-                  </Button>
                 </div>
                 <Card.Body className="d-flex flex-column">
                   <div className="d-flex justify-content-between align-items-center mb-2">

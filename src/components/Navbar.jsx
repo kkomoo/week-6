@@ -23,27 +23,31 @@ const NavigationBar = () => {
   };
 
   return (
-    <Navbar bg="light" expand="lg" className="border-bottom">
+    <Navbar bg="dark" variant="dark" expand="lg" className="border-bottom shadow-sm sticky-top">
       <Container>
-        <Navbar.Brand as={Link} to="/home" className="fw-bold">
+        <Navbar.Brand as={Link} to="/home" className="fw-bold text-light">
           CHRONOSPHERE
         </Navbar.Brand>
         <Navbar.Toggle aria-controls="basic-navbar-nav" />
         <Navbar.Collapse id="basic-navbar-nav">
           <Nav className="ms-auto">
-            <Nav.Link as={Link} to="/home">
+            <Nav.Link as={Link} to="/home" className="text-light">
               <FontAwesomeIcon icon={faHome} className="me-2" /> Home
             </Nav.Link>
-            <Nav.Link as={Link} to="/cart">
+            <Nav.Link as={Link} to="/cart" className="text-light">
               <FontAwesomeIcon icon={faShoppingCart} className="me-2" /> Cart
             </Nav.Link>
-            <Nav.Link as={Link} to="/seller/dashboard" className={isSellerPage ? 'active' : ''}>
+            <Nav.Link 
+              as={Link} 
+              to="/seller/dashboard" 
+              className={`text-light ${isSellerPage ? 'active fw-bold' : ''}`}
+            >
               <FontAwesomeIcon icon={faStore} className="me-2" /> Seller
             </Nav.Link>
             <Button 
-              variant="outline-secondary" 
+              variant="outline-light" 
               size="sm" 
-              className="ms-2 d-flex align-items-center"
+              className="ms-3 d-flex align-items-center"
               onClick={handleLogout}
             >
               <FontAwesomeIcon icon={faSignOutAlt} className="me-2" /> Logout
