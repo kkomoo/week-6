@@ -1,12 +1,16 @@
-import React, { useState } from 'react';
-import { Container, Row, Col, Form, Button, Alert } from 'react-bootstrap';
+import React, { useState, useEffect } from 'react';
+import { Container, Row, Col, Form, Button, Alert, Spinner } from 'react-bootstrap';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faArrowLeft, faSave, faImage } from '@fortawesome/free-solid-svg-icons';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 
 const AddProduct = () => {
+  const navigate = useNavigate();
   const [validated, setValidated] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [user, setUser] = useState(null);
   const [formData, setFormData] = useState({
     name: '',
     price: '',
@@ -18,12 +22,29 @@ const AddProduct = () => {
     imagePreview: null
   });
 
+  useEffect(() => {
+    // Check if user is logged in and is a seller
+    const storedUser = localStorage.getItem('user');
+    if (storedUser) {
+      const userData = JSON.parse(storedUser);
+      setUser(userData);
+
+      // Redirect if not a seller
+      if (userData.role !== 'seller') {
+        navigate('/home');
+      }
+    } else {
+      // Redirect to login if not logged in
+      navigate('/login');
+    }
+  }, [navigate]);
+
   const categories = [
-    'Luxury', 
-    'Sports', 
-    'Smart', 
-    'Classic', 
-    'Vintage', 
+    'Luxury',
+    'Sports',
+    'Smart',
+    'Classic',
+    'Vintage',
     'Professional',
     'Minimalist'
   ];
@@ -31,7 +52,7 @@ const AddProduct = () => {
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
     const val = type === 'checkbox' ? checked : value;
-    
+
     setFormData({
       ...formData,
       [name]: val
@@ -49,39 +70,76 @@ const AddProduct = () => {
     }
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     const form = e.currentTarget;
-    
+
     if (form.checkValidity() === false) {
       e.stopPropagation();
       setValidated(true);
       return;
     }
 
-    // In a real app, you would send the form data to your backend
-    console.log('Product data to submit:', formData);
-    
-    // Show success message
-    setShowSuccess(true);
-    
-    // Reset form after successful submission
-    setFormData({
-      name: '',
-      price: '',
-      description: '',
-      category: '',
-      quantity: '',
-      isNew: false,
-      imageFile: null,
-      imagePreview: null
-    });
-    setValidated(false);
-    
-    // Hide success message after 5 seconds
-    setTimeout(() => {
-      setShowSuccess(false);
-    }, 5000);
+    if (!user) {
+      setError('You must be logged in as a seller to add products');
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+
+    try {
+      // Prepare data for API
+      const productData = {
+        product_name: formData.name,
+        product_desc: formData.description,
+        category: formData.category,
+        price: parseFloat(formData.price),
+        stock_quantity: parseInt(formData.quantity, 10),
+        seller_id: user.user_id
+      };
+
+      // Send data to API
+      const response = await fetch('http://localhost/week-6/api/controllers/create_product.php', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(productData)
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        // Show success message
+        setShowSuccess(true);
+
+        // Reset form after successful submission
+        setFormData({
+          name: '',
+          price: '',
+          description: '',
+          category: '',
+          quantity: '',
+          isNew: false,
+          imageFile: null,
+          imagePreview: null
+        });
+        setValidated(false);
+
+        // Hide success message after 5 seconds
+        setTimeout(() => {
+          setShowSuccess(false);
+        }, 5000);
+      } else {
+        setError(data.message || 'Failed to add product. Please try again.');
+      }
+    } catch (err) {
+      console.error('Error adding product:', err);
+      setError('Network error. Please try again later.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -97,6 +155,12 @@ const AddProduct = () => {
         {showSuccess && (
           <Alert variant="success" onClose={() => setShowSuccess(false)} dismissible>
             Product has been successfully added!
+          </Alert>
+        )}
+
+        {error && (
+          <Alert variant="danger" onClose={() => setError('')} dismissible>
+            {error}
           </Alert>
         )}
 
@@ -212,8 +276,28 @@ const AddProduct = () => {
           </Row>
 
           <div className="mt-4">
-            <Button type="submit" variant="primary">
-              <FontAwesomeIcon icon={faSave} className="me-2" /> Save Product
+            <Button
+              type="submit"
+              variant="primary"
+              disabled={loading}
+            >
+              {loading ? (
+                <>
+                  <Spinner
+                    as="span"
+                    animation="border"
+                    size="sm"
+                    role="status"
+                    aria-hidden="true"
+                    className="me-2"
+                  />
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <FontAwesomeIcon icon={faSave} className="me-2" /> Save Product
+                </>
+              )}
             </Button>
           </div>
         </Form>
@@ -222,4 +306,4 @@ const AddProduct = () => {
   );
 };
 
-export default AddProduct; 
+export default AddProduct;

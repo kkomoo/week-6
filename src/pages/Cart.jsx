@@ -1,42 +1,149 @@
-import React, { useState } from 'react';
-import { Container, Table, Button, Card, Row, Col, Badge } from 'react-bootstrap';
+import React, { useState, useEffect } from 'react';
+import { Container, Table, Button, Card, Row, Col, Badge, Alert, Spinner } from 'react-bootstrap';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faTrash, faMinus, faPlus, faArrowLeft, faCreditCard, faShoppingCart } from '@fortawesome/free-solid-svg-icons';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 
-// Sample cart data updated with real watch images
-const initialCartItems = [
-  {
-    id: 5,
-    name: 'Luxury Gold',
-    price: 599.99,
-    quantity: 1,
-    image: 'https://images.unsplash.com/photo-1522312346375-d1a52e2b99b3?q=80&w=100&h=100&auto=format&fit=crop'
-  },
-  {
-    id: 3,
-    name: 'Urban Minimalist',
-    price: 199.99,
-    quantity: 2,
-    image: 'https://images.unsplash.com/photo-1523170335258-f5ed11844a49?q=80&w=100&h=100&auto=format&fit=crop'
-  }
-];
+// Default image for products
+import defaultImage from '../assets/watches/classic-silver.jpg';
 
 const Cart = () => {
-  const [cartItems, setCartItems] = useState(initialCartItems);
+  const navigate = useNavigate();
+  const [cartItems, setCartItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [user, setUser] = useState(null);
+  const [updating, setUpdating] = useState(false);
 
-  const handleQuantityChange = (id, change) => {
+  useEffect(() => {
+    // Check if user is logged in
+    const storedUser = localStorage.getItem('user');
+    if (storedUser) {
+      const userData = JSON.parse(storedUser);
+      setUser(userData);
+
+      // Fetch cart data
+      fetchCartItems(userData.user_id);
+    } else {
+      // Redirect to login if not logged in
+      setLoading(false);
+      setError('Please log in to view your cart');
+    }
+  }, [navigate]);
+
+  const fetchCartItems = async (userId) => {
+    setLoading(true);
+    setError('');
+
+    try {
+      const response = await fetch(`http://localhost/week-6/api/controllers/read_cart.php?user_id=${userId}`);
+      const data = await response.json();
+
+      if (response.ok && data.records) {
+        // Transform API data to match our component needs
+        const formattedCartItems = data.records.map(item => ({
+          id: item.cart_id,
+          productId: item.product_id,
+          name: item.product_name,
+          price: parseFloat(item.price),
+          quantity: parseInt(item.quantity, 10),
+          image: defaultImage, // Use default image for now
+          description: item.product_desc
+        }));
+
+        setCartItems(formattedCartItems);
+      } else {
+        // If no cart items found, use empty array
+        setCartItems([]);
+        if (!response.ok) {
+          setError('Failed to load cart items. Please try again later.');
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching cart items:', err);
+      setError('Network error. Please try again later.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleQuantityChange = async (id, change, currentQuantity) => {
+    if (updating) return;
+
+    const newQuantity = Math.max(1, currentQuantity + change);
+
+    // Optimistically update UI
     setCartItems(items =>
       items.map(item =>
         item.id === id
-          ? { ...item, quantity: Math.max(1, item.quantity + change) }
+          ? { ...item, quantity: newQuantity }
           : item
       )
     );
+
+    setUpdating(true);
+
+    try {
+      const response = await fetch('http://localhost/week-6/api/controllers/update_cart.php', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          cart_id: id,
+          user_id: user.user_id,
+          quantity: newQuantity
+        })
+      });
+
+      if (!response.ok) {
+        // If update fails, revert to original cart data
+        fetchCartItems(user.user_id);
+        setError('Failed to update quantity. Please try again.');
+      }
+    } catch (err) {
+      console.error('Error updating cart:', err);
+      // If update fails, revert to original cart data
+      fetchCartItems(user.user_id);
+      setError('Network error. Please try again later.');
+    } finally {
+      setUpdating(false);
+    }
   };
 
-  const handleRemoveItem = (id) => {
+  const handleRemoveItem = async (id) => {
+    if (updating) return;
+
+    // Optimistically update UI
     setCartItems(items => items.filter(item => item.id !== id));
+
+    setUpdating(true);
+
+    try {
+      const response = await fetch('http://localhost/week-6/api/controllers/remove_from_cart.php', {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          cart_id: id,
+          user_id: user.user_id
+        })
+      });
+
+      if (!response.ok) {
+        // If delete fails, revert to original cart data
+        fetchCartItems(user.user_id);
+        setError('Failed to remove item. Please try again.');
+      }
+    } catch (err) {
+      console.error('Error removing item:', err);
+      // If delete fails, revert to original cart data
+      fetchCartItems(user.user_id);
+      setError('Network error. Please try again later.');
+    } finally {
+      setUpdating(false);
+    }
   };
 
   const calculateSubtotal = () => {
@@ -55,6 +162,51 @@ const Cart = () => {
     return calculateSubtotal() + calculateTax() + calculateShipping();
   };
 
+  const handleCheckout = async () => {
+    if (updating || cartItems.length === 0) return;
+
+    setUpdating(true);
+    setError('');
+
+    try {
+      // Prepare order data
+      const orderData = {
+        user_id: user.user_id,
+        total_amount: calculateTotal(),
+        shipping_address: "Default shipping address", // In a real app, you would get this from a form
+        cart_items: cartItems.map(item => ({
+          product_id: item.productId,
+          quantity: item.quantity,
+          price: item.price
+        }))
+      };
+
+      // Create order
+      const response = await fetch('http://localhost/week-6/api/controllers/create_order.php', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(orderData)
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        // Show success message and redirect
+        alert('Order placed successfully!');
+        navigate('/home');
+      } else {
+        setError(data.message || 'Failed to place order. Please try again.');
+      }
+    } catch (err) {
+      console.error('Error placing order:', err);
+      setError('Network error. Please try again later.');
+    } finally {
+      setUpdating(false);
+    }
+  };
+
   return (
     <div className="bg-light py-5 min-vh-100">
       <Container>
@@ -65,7 +217,18 @@ const Cart = () => {
           </Link>
         </div>
 
-        {cartItems.length === 0 ? (
+        {error && (
+          <Alert variant="danger" className="mb-4" onClose={() => setError('')} dismissible>
+            {error}
+          </Alert>
+        )}
+
+        {loading ? (
+          <div className="text-center py-5">
+            <Spinner animation="border" variant="primary" />
+            <p className="mt-3">Loading your cart...</p>
+          </div>
+        ) : cartItems.length === 0 ? (
           <Card className="border-0 shadow-sm">
             <Card.Body className="text-center py-5">
               <div className="mb-4">
@@ -116,8 +279,9 @@ const Cart = () => {
                               <Button
                                 variant="light"
                                 size="sm"
-                                onClick={() => handleQuantityChange(item.id, -1)}
+                                onClick={() => handleQuantityChange(item.id, -1, item.quantity)}
                                 className="rounded-circle p-1"
+                                disabled={updating}
                               >
                                 <FontAwesomeIcon icon={faMinus} />
                               </Button>
@@ -125,8 +289,9 @@ const Cart = () => {
                               <Button
                                 variant="light"
                                 size="sm"
-                                onClick={() => handleQuantityChange(item.id, 1)}
+                                onClick={() => handleQuantityChange(item.id, 1, item.quantity)}
                                 className="rounded-circle p-1"
+                                disabled={updating}
                               >
                                 <FontAwesomeIcon icon={faPlus} />
                               </Button>
@@ -186,4 +351,4 @@ const Cart = () => {
   );
 };
 
-export default Cart; 
+export default Cart;
